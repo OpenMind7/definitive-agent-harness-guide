@@ -15,6 +15,23 @@
 
 ---
 
+## Who This Is For
+
+**If your AI agent forgets context, repeats mistakes, picks wrong tools, or burns money at scale — this guide shows what to build next.** It maps agent engineering across 7 levels, from one-shot prompts to self-improving distributed systems. Start with the [20-minute Quick Start](#quick-start-20-minute-setup-level-3) to reach Level 3, where reliability begins. Examples use Claude Code syntax, but every concept — hooks, memory layers, MCP integration, back-pressure, orchestration — applies to Cursor, Copilot, Windsurf, OpenAI agents, or any framework. Most teams see massive gains at L3. L4+ is for teams building the factory that builds machines.
+
+### Framework Translation Table
+
+| Concept | Claude Code | Cursor | Copilot | OpenAI Agents | Generic |
+|---------|-------------|--------|---------|---------------|---------|
+| Project instructions | CLAUDE.md | .cursorrules | .github/copilot-instructions.md | system prompt | config file |
+| Scoped rules | .claude/rules/ | .cursor/rules/ | — | tool descriptions | rule engine |
+| Lifecycle hooks | hooks (Pre/PostToolUse, Stop) | — | — | function callbacks | middleware |
+| Tool integration | MCP servers | MCP servers | MCP / extensions | function calling | API adapters |
+| Agent definitions | .claude/agents/ | — | — | Agent SDK | agent config |
+| Memory persistence | MEMORY.md + memory/ | .cursor/memory/ | — | thread state | state store |
+
+---
+
 ## Table of Contents
 
 1. [The 7 Levels of Agent Engineering](#the-7-levels-of-agent-engineering)
@@ -289,7 +306,7 @@ exit 0
 
 ### 3b: MCP Servers & Tool Integration
 
-**MCP (Model Context Protocol) is the missing layer most guides skip.** It's the standardized protocol for connecting agents to external tools and data — 97M+ monthly SDK downloads, adopted by every major AI provider.
+**MCP (Model Context Protocol) is the missing layer most guides skip.** It's the standardized protocol for connecting agents to external tools and data — [97M+ monthly SDK downloads](https://www.infoq.com/news/2026/04/pinterest-mcp-ecosystem/) as of April 2026, adopted by every major AI provider ([architecture overview](https://modelcontextprotocol.io/docs/learn/architecture)).
 
 Think of it this way:
 - **L2 gives the agent memory** (what it knows)
@@ -615,7 +632,7 @@ Key capabilities (all YAML frontmatter fields):
 - **Hooks**: `hooks` — agent-specific hook configuration
 - **Agent teams** (experimental): Shared task lists, direct messaging between agents, lifecycle hooks (`TaskCreated`, `TaskCompleted`, `TeammateIdle`)
 
-> **Note:** As of Claude Code v2.1.63, the `Task(...)` API was renamed to `Agent(...)`. Subagents cannot spawn other subagents — this is an intentional safety constraint.
+> **Implementation note (April 2026):** In Claude Code, the `Task(...)` API was renamed to `Agent(...)` ([sub-agents docs](https://docs.anthropic.com/en/docs/claude-code/sub-agents)). Subagents cannot spawn other subagents — this is an intentional safety constraint. Check your framework's current docs for the latest API names.
 
 #### Multi-Agent Patterns
 
@@ -813,6 +830,8 @@ A persistent, evolving knowledge base of patterns the agent has learned:
 
 ### Confidence Mechanics
 
+> **Reference heuristics.** These values come from one production system's tuning. Adjust thresholds to your domain — the principle (decay, cap, prune) matters more than the exact numbers.
+
 ```
 New pattern:              confidence = 0.60
 Each successful use:      confidence += 0.05 (cap 0.99)
@@ -835,6 +854,8 @@ Periodic consolidation (daily or on `/dream`):
 7. Check for pattern conflicts and resolve by evidence strength
 
 ### Metacognitive State Vector (MSV)
+
+> **Reference architecture.** The MSV routing below reflects one production implementation. The key idea — route deeper on harder problems, stay fast on familiar ones — generalizes. The exact thresholds should be tuned to your workload.
 
 Before every task, the agent computes:
 
@@ -1271,7 +1292,7 @@ The 2026 agent ecosystem has three layers:
 │  Agent-to-tool integration                           │
 │  Capabilities: Resources, Tools, Prompts, Sampling   │
 │  Wire: JSON-RPC 2.0 over stdio/SSE/HTTP             │
-│  97M+ monthly SDK downloads                          │
+│  97M+ monthly SDK downloads (April 2026)              │
 │                                                      │
 ├──────────────────────────────────────────────────────┤
 │                                                      │
