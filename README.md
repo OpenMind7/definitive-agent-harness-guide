@@ -31,7 +31,7 @@ Most teams would see massive gains just reaching L3. But now you know what's pos
 
 ```bash
 # Clone and run the 20-minute setup
-git clone https://github.com/NeuroAlchemist/definitive-agent-harness-guide.git
+git clone https://github.com/OpenMind7/definitive-agent-harness-guide.git
 cd definitive-agent-harness-guide
 bash examples/quick-start.sh
 ```
