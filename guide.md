@@ -21,21 +21,22 @@
 
 ### Framework Translation Table
 
-| Concept | Claude Code | Cursor | Copilot | OpenAI Agents | Generic |
-|---------|-------------|--------|---------|---------------|---------|
-| Project instructions | CLAUDE.md | .cursorrules | .github/copilot-instructions.md | system prompt | config file |
-| Scoped rules | .claude/rules/ | .cursor/rules/ | — | tool descriptions | rule engine |
-| Lifecycle hooks | hooks (Pre/PostToolUse, Stop) | — | — | function callbacks | middleware |
-| Tool integration | MCP servers | MCP servers | MCP / extensions | function calling | API adapters |
-| Agent definitions | .claude/agents/ | — | — | Agent SDK | agent config |
-| Memory persistence | MEMORY.md + memory/ | .cursor/memory/ | — | thread state | state store |
+| Concept | Claude Code | Cursor | Copilot | OpenAI Agents SDK | Anthropic Agent SDK | Generic |
+|---------|-------------|--------|---------|-------------------|---------------------|---------|
+| Project instructions | CLAUDE.md | .cursorrules | .github/copilot-instructions.md | system prompt (Responses API) | system prompt | config file |
+| Scoped rules | .claude/rules/ | .cursor/rules/ | — | tool descriptions | tool descriptions | rule engine |
+| Lifecycle hooks | hooks (Pre/PostToolUse, Stop) | — | — | guardrails + tracing hooks | tool hooks | middleware |
+| Tool integration | MCP servers | MCP servers | MCP / extensions | built-in tools + function calling | MCP servers + tool_use | API adapters |
+| Agent definitions | .claude/agents/ | — | — | Agent class + handoffs | Agent class | agent config |
+| Memory persistence | MEMORY.md + memory/ | .cursor/memory/ | — | thread state / conversation | external (bring your own) | state store |
+| Orchestration | Teams (shared task lists) | — | — | Swarm handoffs + tracing | custom orchestration | workflow engine |
 
 ---
 
 ## Table of Contents
 
 1. [The 7 Levels of Agent Engineering](#the-7-levels-of-agent-engineering)
-2. [Level 1: Prompt Engineering](#level-1-prompt-engineering)
+2. [Level 1: Prompt Engineering](#level-1-prompt-engineering-the-starting-point)
 3. [Level 2: Context Engineering](#level-2-context-engineering)
 4. [Level 3: Harness Engineering](#level-3-harness-engineering)
    - 3a: Hooks & Lifecycle
@@ -74,6 +75,24 @@ The original guide proposed 3 levels. Production reality demands 7.
 | **L5** | Self-Evolution Engineering | Agent improves its own patterns, decays stale knowledge, learns from failures. | <0.1% |
 | **L6** | Adversarial Engineering | Security hardening, behavioral analysis, kill-chain detection, fail-closed gates. | <0.01% |
 | **L7** | Distributed Intelligence | Knowledge graphs, cross-session learning, terminal isolation, fleet orchestration. | Bleeding edge |
+
+```mermaid
+graph LR
+    L1["L1: Prompt<br/>80% of users"] --> L2["L2: Context<br/>15%"]
+    L2 --> L3["L3: Harness<br/>4%"]
+    L3 --> L4["L4: Orchestration<br/>&lt;1%"]
+    L4 --> L5["L5: Self-Evolution<br/>&lt;0.1%"]
+    L5 --> L6["L6: Adversarial<br/>&lt;0.01%"]
+    L6 --> L7["L7: Distributed<br/>Bleeding edge"]
+
+    style L1 fill:#fee,stroke:#c33
+    style L2 fill:#fed,stroke:#c93
+    style L3 fill:#ffe,stroke:#cc3
+    style L4 fill:#efd,stroke:#3c3
+    style L5 fill:#def,stroke:#39c
+    style L6 fill:#dcf,stroke:#93c
+    style L7 fill:#fdf,stroke:#c3c
+```
 
 **Most people are stuck at L1.** They write better prompts and wonder why the AI forgets everything.
 **L2 fixes memory.** L3 builds the machine. L4+ builds the factory that builds machines.
@@ -306,7 +325,7 @@ exit 0
 
 ### 3b: MCP Servers & Tool Integration
 
-**MCP (Model Context Protocol) is the missing layer most guides skip.** It's the standardized protocol for connecting agents to external tools and data — [97M+ monthly SDK downloads](https://www.infoq.com/news/2026/04/pinterest-mcp-ecosystem/) as of April 2026, adopted by every major AI provider ([architecture overview](https://modelcontextprotocol.io/docs/learn/architecture)).
+**MCP (Model Context Protocol) is the missing layer most guides skip.** It's the standardized protocol for connecting agents to external tools and data — adopted by every major AI provider with broad ecosystem traction ([architecture overview](https://modelcontextprotocol.io/docs/learn/architecture), [ecosystem context](https://www.infoq.com/news/2026/04/pinterest-mcp-ecosystem/)).
 
 Think of it this way:
 - **L2 gives the agent memory** (what it knows)
@@ -315,7 +334,7 @@ Think of it this way:
 
 #### What MCP Provides
 
-MCP servers expose four capability types:
+MCP servers expose core capability types, with the protocol expanding in 2026:
 
 | Capability | Purpose | Example |
 |-----------|---------|---------|
@@ -323,6 +342,8 @@ MCP servers expose four capability types:
 | **Tools** | Executable actions | Run queries, create PRs, send messages |
 | **Prompts** | Reusable templates | Code review prompts, analysis frameworks |
 | **Sampling** | Reverse LLM calls | Server asks the model for help |
+| **Roots** | Client-scoped file access | Limit server to specific project directories |
+| **Elicitation** | Human-in-the-loop input | Server requests user confirmation at side-effect boundaries |
 
 #### Architecture Pattern: Domain-Specific Servers
 
@@ -372,6 +393,24 @@ Each server:
 - **God server**: One server with 50 tools — the agent can't choose effectively
 - **CLI duplication**: Wrapping well-known CLIs (git, npm) as MCP servers when the agent already knows them from training data
 - **Missing schemas**: Tools without explicit input/output schemas — leads to hallucinated parameters
+
+#### MCP in Production (2026)
+
+The protocol has matured beyond the four original capabilities. Production deployments now address:
+
+**Authorization & OAuth:** Remote MCP servers require authorization. The spec defines an OAuth 2.1 flow where the client (agent host) negotiates tokens with the server. Production pattern: configure per-server auth in your MCP settings, rotate tokens via secret managers, and never hardcode credentials in server configs.
+
+**Roots (Client-Scoped Access):** Roots let the client tell the server which directories it's allowed to access. This prevents a knowledge-base server from reading your entire filesystem — it only sees roots you explicitly grant. Always set roots to the narrowest scope needed.
+
+**Elicitation (Human-in-the-Loop):** Servers can request human input during execution — asking for confirmation before destructive operations, requesting credentials, or getting approval at side-effect boundaries. This is the MCP answer to "how do I keep humans in the loop without breaking the agent flow." Pattern: implement elicitation at irreversible action boundaries (database writes, API calls with side effects, financial transactions).
+
+**Streamable HTTP Transport:** Beyond stdio (local servers) and SSE (remote servers), the 2026 spec adds Streamable HTTP — a single HTTP endpoint that handles both request-response and streaming. This simplifies deployment of remote MCP servers behind standard load balancers and API gateways.
+
+**Failure Modes:** Remote MCP servers fail. Production agents need:
+- Timeout per tool call (server-specific, not global)
+- Retry with exponential backoff for transient failures
+- Graceful degradation when a server is down (skip optional tools, fail-closed for required ones)
+- Circuit breakers to avoid hammering a failing server
 
 #### When to Use MCP vs CLI vs Direct API
 
@@ -630,9 +669,59 @@ Key capabilities (all YAML frontmatter fields):
 - **Memory scoping**: `memory` — `user`, `project`, or `local` memory access
 - **Skills**: `skills` — pre-load specific skills for the agent
 - **Hooks**: `hooks` — agent-specific hook configuration
-- **Agent teams** (experimental): Shared task lists, direct messaging between agents, lifecycle hooks (`TaskCreated`, `TaskCompleted`, `TeammateIdle`)
+- **Agent teams**: Full multi-agent coordination (see team orchestration below)
 
-> **Implementation note (April 2026):** In Claude Code, the `Task(...)` API was renamed to `Agent(...)` ([sub-agents docs](https://docs.anthropic.com/en/docs/claude-code/sub-agents)). Subagents cannot spawn other subagents — this is an intentional safety constraint. Check your framework's current docs for the latest API names.
+> **Implementation note (April 2026):** In Claude Code, subagents are spawned via the `Task` tool with a `subagent_type` parameter selecting the specialist ([sub-agents docs](https://docs.anthropic.com/en/docs/claude-code/sub-agents)). Subagents cannot spawn other subagents — this is an intentional safety constraint. API names evolve between releases; always check your framework's current docs.
+
+#### Team Orchestration
+
+Modern agent frameworks support full team lifecycle coordination. In Claude Code, `TeamCreate` establishes a team with a shared task list. The pattern:
+
+**1. Team Creation & Task Decomposition**
+```
+TeamCreate("feature-team")
+  → Creates shared task list at ~/.claude/tasks/feature-team/
+  → Leader decomposes work into TaskCreate entries
+  → Each task has: subject, description, status, owner, blockedBy
+```
+
+**2. Teammate Spawning & Ownership**
+```
+Task(subagent_type="backend-developer", team_name="feature-team", name="backend-dev")
+Task(subagent_type="frontend-developer", team_name="feature-team", name="frontend-dev")
+  → Each teammate claims tasks via TaskUpdate(owner="backend-dev")
+  → Teammates discover peers by reading team config
+```
+
+**3. Communication Patterns**
+- **Direct messages**: `SendMessage(type="message", recipient="backend-dev", content="...")` — targeted, low-cost
+- **Broadcasts**: `SendMessage(type="broadcast", content="...")` — expensive (N teammates = N deliveries), reserve for blocking issues
+- **Idle semantics**: Teammates go idle after every turn — this is normal, not an error. Sending a message wakes them.
+
+**4. Task Dependencies & Coordination**
+```
+TaskUpdate(taskId="2", addBlockedBy=["1"])  # Task 2 waits for task 1
+  → Teammates check TaskList after completing each task
+  → Pick lowest-ID unblocked, unowned task
+  → Mark completed, check for newly unblocked work
+```
+
+**5. Graceful Shutdown**
+```
+SendMessage(type="shutdown_request", recipient="backend-dev")
+  → Teammate approves or rejects (with reason)
+  → After all teammates shut down: TeamDelete()
+```
+
+**6. Plan Approval (Controlled Autonomy)**
+```
+# Leader spawns teammate with mode="plan"
+# Teammate calls ExitPlanMode → leader receives plan_approval_request
+# Leader reviews, approves or rejects with feedback
+SendMessage(type="plan_approval_response", approve=true)
+```
+
+The key insight: team orchestration is infrastructure, not just "spawn more agents." Without shared task lists, ownership, and communication primitives, agents duplicate work, deadlock on shared resources, or silently fail.
 
 #### Multi-Agent Patterns
 
@@ -667,6 +756,39 @@ Brain B (GPT)    ──→ reviews code
                 Findings merged
                       ↓
                 Brain A fixes
+```
+
+```mermaid
+graph TD
+    subgraph "Pattern 1: Sequential Pipeline"
+        S1[Research] --> S2[Plan] --> S3[Implement] --> S4[Review] --> S5[Fix] --> S6[Re-review] --> S7[Commit]
+    end
+
+    subgraph "Pattern 2: Parallel Swarm"
+        direction LR
+        T[Task] --> SEC[Security Reviewer]
+        T --> CODE[Code Reviewer]
+        T --> ARCH[Architecture Reviewer]
+        T --> PERF[Performance Reviewer]
+        SEC --> MERGE[Merge Findings]
+        CODE --> MERGE
+        ARCH --> MERGE
+        PERF --> MERGE
+        MERGE --> FIX[Fix]
+    end
+
+    subgraph "Pattern 3: Planner-Generator-Evaluator"
+        P[Planner] -->|sprint contract| G[Generator]
+        G -->|code| E[Evaluator]
+        E -->|pass| COMMIT[Commit]
+        E -->|fail + feedback| G
+    end
+
+    subgraph "Pattern 4: Dual-Brain"
+        BA[Brain A - Claude] -->|writes code| BB[Brain B - GPT]
+        BB -->|findings| MF[Merge Findings]
+        MF -->|fix list| BA
+    end
 ```
 
 #### Agent Selection Matrix
@@ -767,6 +889,16 @@ For advanced multi-agent systems, the **Agent-to-Agent (A2A) protocol** standard
 │  Layer 1: WebMCP                  │  Agent ↔ Web (structured access)
 │  (web resources, HTTP)             │
 └───────────────────────────────────┘
+```
+
+```mermaid
+graph TB
+    A2A["Layer 3: A2A<br/>Agent ↔ Agent orchestration"] --> MCP["Layer 2: MCP<br/>Agent ↔ Tool integration"]
+    MCP --> WEB["Layer 1: WebMCP<br/>Agent ↔ Web · structured access"]
+
+    style A2A fill:#dcf,stroke:#93c
+    style MCP fill:#def,stroke:#39c
+    style WEB fill:#efd,stroke:#3c3
 ```
 
 #### When to Use Which
@@ -1140,6 +1272,47 @@ This creates a **hive mind** — the collective intelligence of all your agents 
 └─────────────────────────────────────────────────────────────┘
 ```
 
+```mermaid
+graph TD
+    subgraph START["Session Start"]
+        H1[System health check] --> H2[Terminal fingerprint → workstream lock]
+        H2 --> H3[Load MEMORY.md + active-work]
+        H3 --> H4[MCP + KB connectivity probe]
+        H4 --> H5[Check consolidation gates]
+    end
+
+    subgraph DURING["During Session"]
+        D1[PreToolUse: classify → score → allow/block]
+        D2[MSV routing: System 1 fast · System 2 deep]
+        D3[MCP tool calls: schema-validated]
+        D4[Multi-agent dispatch + task ownership]
+        D5[PostToolUse: lint → analyze → extract patterns]
+        D6[Back-pressure: build errors fed back]
+        D7[Context budget enforcement]
+    end
+
+    subgraph END_S["Session End"]
+        E1[MEMORY.md rewrite] --> E2[active-work update]
+        E2 --> E3[Pattern extraction → ReasoningBank]
+        E3 --> E4[KB sync + notifications]
+    end
+
+    subgraph BG["Background Automation"]
+        B1["Morning briefing · 6am"]
+        B2["Nightly consolidation · 3am"]
+        B3["Knowledge decay · monthly"]
+        B4["Fleet sync · hourly"]
+    end
+
+    START --> DURING --> END_S
+    BG -.->|continuous| DURING
+
+    style START fill:#efd,stroke:#3c3
+    style DURING fill:#def,stroke:#39c
+    style END_S fill:#fed,stroke:#c93
+    style BG fill:#dcf,stroke:#93c
+```
+
 ---
 
 ## Quick Start: 20-Minute Setup (Level 3)
@@ -1292,7 +1465,7 @@ The 2026 agent ecosystem has three layers:
 │  Agent-to-tool integration                           │
 │  Capabilities: Resources, Tools, Prompts, Sampling   │
 │  Wire: JSON-RPC 2.0 over stdio/SSE/HTTP             │
-│  97M+ monthly SDK downloads (April 2026)              │
+│  Adopted by every major AI provider (2026)             │
 │                                                      │
 ├──────────────────────────────────────────────────────┤
 │                                                      │
@@ -1302,6 +1475,25 @@ The 2026 agent ecosystem has three layers:
 │  The foundation everything else builds on            │
 │                                                      │
 └──────────────────────────────────────────────────────┘
+```
+
+```mermaid
+graph TB
+    subgraph "Layer 3: A2A — Agent-to-Agent"
+        A2A_DESC["Agent discovery, task delegation, negotiation<br/>Wire: JSON over HTTP + SSE streaming<br/>Discovery: Agent Cards · /.well-known/agent.json"]
+    end
+    subgraph "Layer 2: MCP — Model Context Protocol"
+        MCP_DESC["Agent-to-tool integration<br/>Capabilities: Resources, Tools, Prompts, Sampling<br/>Wire: JSON-RPC 2.0 over stdio/SSE/HTTP<br/>97M+ monthly SDK downloads · April 2026"]
+    end
+    subgraph "Layer 1: WebMCP / Direct"
+        WEB_DESC["Structured web access, HTTP APIs, CLI tools<br/>The foundation everything else builds on"]
+    end
+
+    A2A_DESC --> MCP_DESC --> WEB_DESC
+
+    style A2A_DESC fill:#dcf,stroke:#93c
+    style MCP_DESC fill:#def,stroke:#39c
+    style WEB_DESC fill:#efd,stroke:#3c3
 ```
 
 **Rule of thumb:**

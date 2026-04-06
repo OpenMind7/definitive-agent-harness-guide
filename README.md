@@ -18,13 +18,14 @@ Most teams would see massive gains just reaching L3. But now you know what's pos
 
 ## What's Inside
 
-- **1500+ lines** of production-tested patterns and real code examples
+- **1700+ lines** of production-tested patterns and real code examples
 - **60+ research sources** — Fowler, Anthropic, OpenAI, LangChain, HumanLayer, GitHub, ArXiv
 - **20-minute Quick Start** to reach Level 3 immediately
 - **Hook visibility rules** — the #1 mistake in harness engineering, explained
 - **MCP integration patterns** — when to use MCP vs CLI vs direct API
 - **Multi-agent orchestration** — typed schemas, agent discovery, control planes
 - **Cost management**, **debugging strategies**, and **anti-patterns** sections
+- **Mermaid diagrams** — GitHub-rendered visual architecture, protocol stack, and orchestration patterns
 - **Post-adversarial reviewed** — two rounds of adversarial critique, all findings fixed
 
 ## Quick Start
@@ -40,7 +41,7 @@ This creates CLAUDE.md, MEMORY.md, hooks, and your first agent in under 5 minute
 
 ## Read the Guide
 
-**[guide.md](guide.md)** — the complete 1500+ line guide
+**[guide.md](guide.md)** — the complete 1700+ line guide with Mermaid diagrams
 
 ## Templates
 
